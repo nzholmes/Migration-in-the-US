@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>The Migration Flow</title>
+    <script src="https://d3js.org/d3.v4.js"></script>
+    <script src="https://d3js.org/topojson.v1.min.js"></script>
+
+    <style>
+        #main path:hover {
+          fill:pink;
+          fill-opacity:0.7;
+        }
+        body {
+          background: #000020;
+          /*background: white;*/
+        }
+        #count {
+          position: absolute;
+          top: 35%;
+          left: 70%;
+          color: white;
+          font-size: 40px;
+        }
+        .states {
+            /*fill: #000030;*/
+            fill-opacity: 0; 
+            /*stroke: #ADD8E6;*/
+            stroke: white;
+            stroke-linejoin: round;
+        }
+        #secondary {
+          position: absolute;
+          top: 8%;
+          left: 68%;
+        }
+        .minimap {
+            fill: purple;
+            stroke: #ADD8E6;
+            stroke-linejoin: round;
+        }
+    </style>
+</head>
+<body>
+<p id="count" style="z-index: 4;"></p>
+<div>
+<canvas id="canvas" width="1200" height="700"
+style="position: absolute;left: 0;top:0;z-index: 0;"></canvas>
+
+<canvas id="canvas1" width="1200" height="700"
+style="position: absolute;left: 0;top:0;z-index: 1;"></canvas>
+
+<svg id="main" style="position: absolute; left: 0; top: 0; z-index: 2;"></svg>
+</div>
+<svg id="secondary" width="300" height="200" style="z-index: 3;"></svg>
+
+<script>
+    // reference: https://codepen.io/corenominal/pen/YqBrbo
+    var canvas = document.getElementById('canvas');
+    var ctx = canvas.getContext('2d');
+    var canvas1 = document.getElementById('canvas1');
+    var ctx1 = canvas1.getContext('2d');
+    var count=0;
+    var width = 1200, height = 700;
+    var margin = {top: 20, right: 20, bottom: 60, left: 60};
+    var state_capital={};
+    var canvas_capital={};
+    var names = [];
+    var revNames = {};
+    var selected = "";
+    var target = "";
+    var canvasOffset = 10;
+    d3.tsv("https://lawdpls.github.io/idname.tsv", function(tsv){
+    tsv.forEach(function(d,i){
+      // names[d.name] = d.id;
+      var name = d.name;
+      var id = d.id;
+      names.push({name, id});
+    });
+    tsv.forEach(function(d,i){
+      // names[d.name] = d.id;
+      revNames[d.id] = d.name;
+    });
+    // console.log(names)
+    d3.json("https://lawdpls.github.io/05/capital.json", function(error, nodes) {
+        if (error) throw error;
+        //var canvas = document.getElementById('canvas');
+        //var ctx = canvas1.getContext('2d');
+        var graph = d3.select("#main")
+                        .attr("width", width)
+                        .attr("height", height)
+                        .append("g")
+                        .attr("transform", "translate(-30, 80)");
+        var projection = d3.geoAlbersUsa()
+                .scale(1100);
+        var path = d3.geoPath()
+                .projection(projection);
+        d3.queue().defer(d3.json, "https://lawdpls.github.io/05/us.json")
+                .await(ready);
+        function ready(error, us) {
+            if (error) throw error;
+            var data = topojson.feature(us, us.objects.states).features;
+            // console.log(data)
+            // graph.append("path")
+            //         .datum(topojson.feature(us, us.objects.states))
+            //         .data(data)
+            //         .attr("class", "states")
+            //         .attr("d", path);
+            graph.selectAll("path")
+                 .data(data)
+                 .enter()
+                 .append("path")
+                 .attr("class", "states")
+                 .attr("d", path);
+            var dot = graph.selectAll(".circle")
+                    .data(nodes)
+                    .enter().append("circle")
+                    .attr("class", "dot")
+                    .attr("id", function(d){
+                        return d.code;
+                    })
+                    .style("fill", "gray")
+                    .style("opacity", 0.5)
+                    .attr("r", 2)
+                    .attr("transform", function(d) {
+                        state_capital[d.state] = projection([d.longitude, d.latitude])
+                        return "translate(" + projection([d.longitude, d.latitude]) + ")";})
+
+            var title=graph.selectAll("text")
+                    .data(nodes)
+                    .enter().append("text")
+                    .text(function (d) {
+                        return d.code
+                    })
+                    .attr("transform", function(d) {
+                        return "translate(" + projection([d.longitude-0.5, d.latitude+0.5]) + ")";})
+                    .attr("font-size", "11px")
+                    .attr("fill","white");
+            for (var i = 0; i < nodes.length; i++) {
+                canvas_capital[nodes[i].state] = [state_capital[nodes[i].state][0] - 20, state_capital[nodes[i].state][1] + 90]
+                // ctx.beginPath();
+                // ctx.arc(state_capital[nodes[i].state][0]-20, state_capital[nodes[i].state][1]+90, 5, 0, Math.PI * 2, true);
+                // ctx.closePath();
+                // ctx.fillStyle = "white";
+                // ctx.fill();
+                //console.log([state_capital[nodes[i].state][0]-20, state_capital[nodes[i].state][1]+90])
+            }
+            var size = Object.keys(canvas_capital).length;
+            var elem = document.getElementById("canvas1");
+            // console.log(canvas_capital);
+            d3.selectAll("#count")
+              .on("click", function(d){
+                selected = selected == false? true:false;
+              })
+            d3.selectAll("path")
+              .on("mouseover", function(d){
+                if (d.id != target) {
+                  selected = d.id;
+                }
+              })
+              .on("mouseout", function(d){
+                selected = "";
+              })
+              .on("click", function(d){
+                target = d.id;
+                flow(canvas_capital, revNames[d.id]);
+                var projection2 = d3.geoAlbersUsa()
+                .scale(400)
+                .translate([150, 100]);
+                d3.select(".minimap")
+                .remove();
+                var path2 = d3.geoPath()
+                .projection(projection2);
+            d3.csv("https://lawdpls.github.io/05/migration.csv", function(error, mig){
+              d3.json("https://lawdpls.github.io/05/us.json", function(unitedState) {
+              var data2 = topojson.feature(unitedState, unitedState.objects.states).features;
+              var graph2 = d3.select("#secondary")
+                        .append("g")
+                        .attr("class", "minimap")
+                        .selectAll("path")
+                        .data(data2)
+                        .enter()
+                        .append("path")
+                        .attr("d", path2)
+                        .style("fill", function(o){
+                          if (o.id == d.id) {
+                            return "red";
+                          }
+                        })
+                        .style("opacity", function(o,i){
+                          // console.log(revNames[d.id])
+                          console.log(mig[d.id]["Florida"])
+                            if (o.id != d.id) {
+                              if (mig[d.id][revNames[o.id]] < 100) {
+                                return 0.1
+                              } else if (mig[d.id][revNames[o.id]] < 500) {
+                                return 0.3
+                              } else if (mig[d.id][revNames[o.id]] < 1000) {
+                                return 0.6
+                              } else if (mig[d.id][revNames[o.id]] < 10000) {
+                                return 0.8
+                              }
+                            }
+                        })
+                        .attr("stroke", "white");
+            })
+            })
+              })
+//             elem.addEventListener('click', function(event) {
+//     			    var x = event.pageX,
+//        	 		      y = event.pageY,
+//        	 		      dots = document.getElementById("canvas");
+//     			    for (var i = 0; i < size; i++) {
+//     				    ctx1.clearRect(0, 0, canvas1.width, canvas.height);
+//     				    if ((Math.abs(canvas_capital[nodes[i].state][0] - x) < 5) && (Math.abs(canvas_capital[nodes[i].state][1] - y) < 5)) {
+//                   selected = nodes[i].state;
+//                   // console.log(names);
+//                   graph.selectAll("path")
+//                       .style("fill", function(d){
+//                       // console.log(d)
+//                       for (var i = 0; i < names.length; i++) {
+//                         if (names[i].name == selected && d.id == names[i].id) {
+//                           return "red";
+//                         }
+//                       }
+//                     })
+//                   flow(canvas_capital, nodes[i].state);
+//     				    }
+//     			    }
+
+//               var projection2 = d3.geoAlbersUsa()
+//                 .scale(400)
+//                 .translate([150, 100]);
+//                 d3.select(".minimap")
+//                 .remove();
+//         if(selected != "") {
+//               var path2 = d3.geoPath()
+//                 .projection(projection2);
+//             d3.csv("https://lawdpls.github.io/05/migration.csv", function(error, mig){
+//               d3.json("https://lawdpls.github.io/05/us.json", function(unitedState) {
+//               var data2 = topojson.feature(unitedState, unitedState.objects.states).features;
+//               // d3.tsv("https://lawdpls.github.io/idname.tsv", function(tsv){
+//               // var names = {};
+//               // tsv.forEach(function(d,i){
+//               //     names[d.id] = d.name;
+//               // });
+              
+//               var id;
+//               for (var j = 0; j < data2.length; j++) {
+//                 for (var i = 0; i < names.length; i++) {
+//                   if (data2[j].id == names[i].id && names[i].name == selected) {
+//                     id = data2[j].id;
+//                     break;
+//                   }
+//                 }
+//               }
+//               console.log(id)
+//               var graph2 = d3.select("#secondary")
+//                         .append("g")
+//                         .attr("class", "minimap")
+//                         .selectAll("path")
+//                         .data(data2)
+//                         .enter()
+//                         .append("path")
+//                         .attr("d", path2)
+//                         .style("fill", function(d){
+//                           if (d.id == id) {
+//                             return "red";
+//                           }
+//                         })
+//                         .style("opacity", function(d,i){
+//                           // console.log(revNames[d.id])
+//                           // console.log(mig[id][selected])
+//                             if (d.id != id) {
+//                               if (mig[id][revNames[d.id]] < 100) {
+//                                 return 0.1
+//                               } else if (mig[id][revNames[d.id]] < 500) {
+//                                 return 0.4
+//                               } else if (mig[id][revNames[d.id]] < 1000) {
+//                                 return 0.7
+//                               }
+//                             }
+//                         })
+//                         .attr("stroke", "white");
+//         });
+// });
+//           }
+//     		    }, false);
+        }
+    });
+    });
+   migrant.instances = [];
+   function migrant(x1,y1,x2,y2,startState){
+     this.x1=x1;
+     this.x2=x2;
+     this.y1=y1;
+     this.y2=y2;
+     this.startState=startState;
+     this.vx=(x2-x1)/((x1-x2)**2+(y1-y2)**2)**0.5;
+     this.vy=(y2-y1)/((x1-x2)**2+(y1-y2)**2)**0.5;
+     this.radius=1;
+     this.color="black";
+     this.draw=function(){
+
+            // var img=new Image();
+            // var x=this.x1;
+            // var y=this.y1;
+            // img.onload = function(){
+            //     ctx1.globalAlpha = 1;
+            //     ctx1.drawImage(img,x,y,2,2);
+            // };
+            //img.src = 'https://mdn.mozillademos.org/files/5395/backdrop.png';
+            // img.src="one-white-pixel.png"
+       
+
+            /*ctx1.beginPath();
+            ctx1.arc(this.x1, this.y1, this.radius, 0, Math.PI*2, true);
+            ctx1.closePath();
+            ctx1.fillStyle = this.color;
+            ctx1.fill();*/
+          var temp;
+          for (var i = 0; i < names.length; i++){
+            if (names[i].name == this.startState) {
+              temp = names[i].id;
+              break;
+            }
+          }
+          if (selected == "" || selected == temp) {
+            ctx1.fillStyle = 'rgba(255,255,255, 1)';
+          } else {
+            ctx1.fillStyle = 'rgba(255,255,255, 0)';
+          }
+            ctx1.fillRect(this.x1,this.y1,2,2);
+
+       }
+       if (this.x1<this.x2){
+           this.direction=function(){
+               //ctx1.fillRect(this.x1-4*this.radius, this.y1-2*this.radius, 10*this.radius, 5*this.radius);
+               //ctx1.clearRect(this.x1-4*this.radius, this.y1-2*this.radius, 3*this.radius, 3*this.radius);
+               ctx1.clearRect(this.x1 - this.vx -2* this.radius, this.y1 - this.vy - 2*this.radius, 5 * this.radius,5 * this.radius);
+           }
+       }
+       else {
+           this.direction=function(){
+               //ctx1.fillRect(this.x1-this.radius, this.y1-this.radius, 5*this.radius, 5*this.radius);
+               //ctx1.clearRect(this.x1+2*this.radius, this.y1+2*this.radius, 3*this.radius, 3*this.radius);
+               ctx1.clearRect(this.x1 -this.vx - 2*this.radius, this.y1 - this.vy - 2*this.radius, 5 * this.radius, 5 * this.radius);
+           }
+       }
+       /*this.prepare=function(){
+           var self=this;
+           //ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
+           //ctx.fillRect(0, 0, canvas.width, canvas.height);
+           //ctx.clearRect(0, 0, canvas.width, canvas.height);
+           this.direction();
+           self.draw();
+           self.x1 += self.vx;
+           self.y1 += self.vy;
+           console.log(this.x1);
+           if (Math.abs(this.x1-this.x2)<=this.radius && Math.abs(this.y1-this.y2)<=this.radius){
+               console.log(this.x1);
+               window.clearInterval(this.s);
+               ctx1.clearRect(this.x1-this.radius*3, this.y1-this.radius*3, 6*this.radius, 6*this.radius);
+           }
+           //window.setInterval(this.animate.bind(this), 100)
+           //window.requestAnimationFrame(self.animate.bind(this));//function(){this.animate()}.bind(this)
+       }
+       this.animate=function(){
+           this.s=window.setInterval(this.prepare.bind(this), 10);
+       }*/
+   }
+   /*migrant.prototype.animate=function(){
+               ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
+               ctx.fillRect(0, 0, canvas.width, canvas.height)
+               this.draw();
+               this.x1 += this.vx;
+               this.y1 += this.vy;
+               //window.setInterval(this.animate.bind(this), 1000)
+               window.requestAnimationFrame(this.animate.bind(this))
+   }*/
+   migrant.prototype.prepare=function(){
+           var self=this;
+           //ctx1.fillStyle = 'rgba(255, 255, 255, 0.0)';
+           //ctx1.fillRect(0, 0, canvas1.width, canvas1.height);
+           //ctx1.clearRect(0, 0, canvas.width, canvas.height);
+           //this.direction();
+           self.draw();
+           self.x1 += self.vx;
+           self.y1 += self.vy;
+           this.s=window.requestAnimationFrame(self.prepare.bind(this));
+           if (Math.abs(this.x1-this.x2)<=this.radius && Math.abs(this.y1-this.y2)<=this.radius){
+               //console.log(this.x1);
+               count+=50;
+               // console.log(count);
+               //window.clearInterval(this.s);
+               window.cancelAnimationFrame(this.s);
+               ctx1.clearRect(this.x1-this.radius*3, this.y1-this.radius*3, 6*this.radius, 6*this.radius);
+           }
+           //window.setInterval(this.animate.bind(this), 100)
+           //window.requestAnimationFrame(self.animate.bind(this));//function(){this.animate()}.bind(this)
+       }
+   migrant.prototype.animate=function(){
+           migrant.instances.push(this);
+           //console.log(migrant.instances.length);
+           //this.s=window.setInterval(this.prepare.bind(this), 10);
+           this.prepare();
+   }
+   migrant.prototype.clear=function(){
+       //window.clearInterval(this.s);
+       window.cancelAnimationFrame(this.s);
+   }
+  a=new migrant(625.4273287806287,454.7406243701706,197.21573906014282,552.4553265207218)
+  b=new migrant(610,440,236,412)
+  c=new migrant(610,440,520,408)
+  d=new migrant(610,440,127,296)
+  e=new migrant(610,440,348,316)
+  f=new migrant(610,440,740,302)
+  g=new migrant(200,200,50,50)
+  h=new migrant(200,200,50,50)
+  i=new migrant(300,300,50,50)
+  j=new migrant(300,200,100,50)
+  k=new migrant(100,200,50,100)
+  //f.animate();
+  //g.animate1();
+  //states={"Alabama":["Alaska", "Florida", "New York", "California"],
+         //"Alaska":["Alabama", "Florida", "New York", "California"]}
+  states={"Alabama":{"Alaska":"10", "Florida": "30", "Arizona":"30", "Arkansas":"20", "Massachusetts":"50",
+                     "Georgia":"40", "Hawaii":"100", "Idaho":"50", "Maine":150,
+                     "Missouri":20,"Colorado":"20", "Connecticut":"30"},
+          "Alaska":{"California":"20", "New York":"30","Florida": "30", "Alabama":"60",
+                     "Arizona":"30", "Arkansas":"20", "Massachusetts":"50",
+                     "Georgia":"40", "Hawaii":"100", "Idaho":"50",
+                     "Maine":150, "Missouri":20, "Colorado":"20", "Connecticut":"30"},
+          "California":{"Colorado":"20", "Connecticut":"30","California":"20", "New York":"30",
+                        "Florida": "30", "Arizona":"30", "Arkansas":"20", "Massachusetts":"50",
+                        "Georgia":"40", "Hawaii":"100", "Idaho":"50",
+                        "Maine":150, "Missouri":20, "Alaska":"10", "Alabama":60}}
+  capital={"Alabama":[625.4273287806287, 454.7406243701706],
+           "Alaska":[197.21573906014282, 552.4553265207218],
+           "Florida":[662.112716828299, 487.61960268590974],
+           "New York":[777.8461114973837, 227.08982943764943],
+           "California":[94.74270213977695, 292.3930709573823],
+           "Connecticut":[797.0922461171922, 240.15364785208737],
+           "Colorado":[337.6891655446592,313.68068313743163],
+           "Arizona":[214.40094732758055, 420.18369271006134],
+           "Arkansas":[526.2957400681499, 415.73969348123296],
+           "Georgia":[652.4141698847379, 424.50995574960655],
+           "Hawaii":[273.96780057963144, 546.5854453997434],
+           "Idaho":[190.95780350500638, 215.25136439634332],
+           "Maine":[823.6298111576921, 182.00691424519346],
+           "Missouri":[525.5328874356591, 341.3555732675801],
+           "Massachusetts":[817.4334491884485, 225.51861400665234]
+           }
+  //console.log(Object.values(states["Alabama"]))
+  function stateToMigrant(state){
+                     end_coord=capital[state];
+                     starts=states[state];
+                     migrants=Object.keys(starts).map(function(key){
+                                                           start_coord=capital[key]
+                                                           instance=new migrant(start_coord[0], start_coord[1], end_coord[0], end_coord[1], key)
+                                                           pair=new migrant_move(instance, starts[key])
+                                                           return pair})
+                     //console.log(Object.keys(starts))
+                     //console.log(capital);
+                     return migrants
+               }
+  function interMove(states, state){ // states is an object that contains all interstate migrant flow
+      //stateMigrants=Object.keys(states).map(stateToMigrant)
+      //stateInfo=new Object();
+      //stateMigrants=new Object();
+      //stateInfo[state]=states[state];
+      //stateMigrants[state]=
+      //console.log(stateInfo);
+      console.log(stateToMigrant(state));
+      stateToMigrant(state).map(function(d){d.move()})
+      /*
+      stateMigrants["Alabama"].map(function(a_state){
+           a_state.map(function(d){
+                 d.move();
+                 //s=new migrant_move(d.migrant, d.number),
+                 //console.log(d.constructor.generate);
+           })
+      })
+      */
+  }
+  //interMove(states, "Alabama");
+  //pair1=Object.keys(states).map(stateToMigrant)
+  //console.log(pair1);
+  //pair1.map(function(pair2){
+       //pair2.map(function(d){d.move()})
+  //})
+  //function(d){d.move()}
+  function flow(state_capital, state){
+        d3.csv("https://lawdpls.github.io/05/migration.csv", function(error, migration){
+                if (error) throw error;
+                stateNames=d3.keys(migration[1])
+                //console.log(stateNames[1])
+                // console.log(migration)
+                var states=new Object();
+                states[state]=migration[stateNames.indexOf(state)]
+                /*migration.forEach(function(d,i){
+                      states[stateNames[i]]=d
+                })*/
+                // console.log(stateNames.indexOf(state));
+                // console.log(states);
+                var capital=state_capital;
+                function stateToMigrant(state){
+                      end_coord=capital[state];
+                      starts=states[state];
+                      migrants=Object.keys(starts).map(function(key){
+                            start_coord=capital[key]
+                            instance=new migrant(start_coord[0], start_coord[1], end_coord[0], end_coord[1], key)
+                            pair=new migrant_move(instance, starts[key])
+                            return pair})
+                      //console.log(Object.keys(starts))
+                      //console.log(capital);
+                      return migrants
+                }
+                function interMove(states, state){ // states is an object that contains all interstate migrant flow
+                    // console.log(stateToMigrant(state));
+                    stateToMigrant(state).map(function(d){d.move()})
+                    /*stateMigrants=Object.keys(states).map(stateToMigrant)
+                    //console.log(stateMigrants)
+                    stateMigrants.map(function(a_state){
+                         a_state.map(function(d){d.move()})
+                    })
+                    */
+                }
+                interMove(states, state);
+                if (migrant_move.instances.length>50){
+                     migrant.instances.forEach(function(d){d.clear()});
+                     migrant.instances=[];
+                     // console.log(migrant.instances.length);
+                     migrant_move.instances.slice(0, 50).map(function(d){d.clear()});
+                     migrant_move.instances.splice(0,50);
+                     count=0;
+                     ctx1.clearRect(0, 0, canvas1.width, canvas1.height);
+                     //console.log(migrant_move.instances);
+                };
+
+                if (migrant_move.instances.length>0){renderer()};
+
+                //console.log("s");
+        })
+  }
+
+  function renderer(){
+		ctx1.fillStyle = 'rgba(0, 0, 32, 0.1)';
+        ctx1.fillRect(0, 0, canvas1.width, canvas1.height);
+		window.requestAnimationFrame(renderer);
+  }
+
+
+  migrant_move.instances = [];
+  function migrant_move(instance, number){
+      var dudu = number;
+      // console.log(instance)
+      this.migrant=instance
+      this.number=number
+      this.generate=function(){
+          if (this.number>0) {
+              migrants=new migrant(this.migrant.x1-canvasOffset+Math.random()*(10-(-10)), this.migrant.y1-canvasOffset+Math.random()*(10-(-10)), this.migrant.x2-canvasOffset, this.migrant.y2-canvasOffset, this.migrant.startState)
+              migrants.animate()
+              this.number-=50
+              //console.log(this.number)
+          }
+          else {
+              window.clearInterval(this.send);
+              // console.log(dudu);
+          }
+      }
+      this.move=function(){
+          migrant_move.instances.push(this);
+          //console.log(migrant_move.instances);
+          /*if (migrant_move.instances.length<50){
+              //migrant_move.instances.splice(0,1);
+              migrant_move.instances.push(this);
+          } else {
+              migrant_move.instances.map()
+              migrant_move.instances.splice(0,49);
+              migrant_move.instances.push(this);
+          }*/
+          //console.log(migrant_move.instances.length);
+          //this.generate()
+          if (dudu != 0) {
+            this.send=window.setInterval(this.generate.bind(this), 2000000/dudu);
+          }
+      }
+      this.clear=function(){
+          window.clearInterval(this.send);
+      }
+  }
+  /*migrant_move.prototype.generate=function(){
+              if (this.number>0) {
+                  migrants=new migrant(this.migrant.x1, this.migrant.y1, this.migrant.x2, this.migrant.y2)
+                  migrants.animate()
+                  this.number-=5000
+                  console.log(this.number)
+              }
+              else {
+                  window.clearInterval(this.send);
+                  console.log("end");
+              }
+  }
+  migrant_move.prototype.move=function(){
+      //this.generate()
+      //console.log(this.number);
+      this.send=window.setInterval(this.generate.bind(this), 5000)
+  }*/
+  //m=new migrant_move(pair1[0]);
+  //m.move();
+  //window.setInterval(draw2, 500, pair[0])
+  //console.log(Object.keys(states).map(keymap1)[0])
+  //console.log(keymap1(Object.keys(states)))
+  function keymap(key){
+      key_coord=capital[key];
+      //console.log(states[key]);
+      migrants=states[key].map(function(key){
+              value_coord=capital[key]
+              instance=new migrant(key_coord[0], key_coord[1], value_coord[0], value_coord[1])
+              return instance
+      })
+      return migrants;
+  }
+  //console.log(Object.keys(states).map(keymap))
+  /*Object.keys(states).map(keymap)
+                       .map(function(migrants){
+                           migrants.map(function(migrant){
+                               migrant.animate();
+                           });
+                        });*/
+  balls=[a,b,c,d,e,f];
+  //balls=[g,h,i,j,k];
+  function draw1(){
+        if (balls.length>0) {
+            ball=balls.pop();
+            ball.animate();
+        }
+  }
+  var ctVar = setInterval(function(){ myTimer() }, 1000);
+
+function myTimer() {
+  if(count != 0) {
+    document.getElementById("count").innerHTML = count;
+  } 
+}
+
+</script>
+</body>
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Line chart</title>
+    <script src="https://d3js.org/d3.v4.js"></script>
+</head>
+<body>
+<style> /* set the CSS */
+
+body { 
+  font: 12px Arial;}
+
+.line {
+    /*stroke: steelblue;*/
+    stroke-width: 2;
+    fill: none;
+}
+
+.axis path,
+.axis line {
+    fill: none;
+    stroke: grey;
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+</style>
+<script>
+    var linemargin = {top: 30, right: 20, bottom: 30, left: 50},
+        linewidth = 650 - linemargin.left - linemargin.right,
+        lineheight = 270 - linemargin.top - linemargin.bottom;
+
+    var gg = d3.select("body")
+    .append("svg")
+        .attr("width", linewidth + linemargin.left + linemargin.right)
+        .attr("height", lineheight + linemargin.top + linemargin.bottom)
+    .append("g")
+        .attr("transform",
+              "translate(" + linemargin.left + "," + linemargin.top + ")");
+
+
+    var x = d3.scaleTime().range([0, linewidth]),
+        y = d3.scaleLinear().range([lineheight, 0]);
+    var parseDate = d3.timeParse("%Y");
+    var xAxis = d3.axisBottom(x);
+    var yAxis = d3.axisLeft(y);
+    var name = "Florida";
+
+    d3.csv("https://lawdpls.github.io/05/sum.csv",function(error,linedata){
+        if (error) throw error;
+        linedata.forEach(function(d){
+          for (var prop in d){
+            if (prop != "Flow") {
+              d[prop] = +d[prop];
+            }
+          }
+            d.Year= parseDate(d.Year);
+        })
+        
+    	var line=d3.line()
+            .x(function(d) { 
+              return x(d.Year); 
+            })
+            .y(function(d) {
+              for (var prop in d) {
+                if (prop == name){
+                  return y(d[prop]);
+                }
+              } 
+            });        
+
+        x.domain(d3.extent(linedata, function(d) { 
+          return d.Year; 
+        }));
+        y.domain([0, d3.max(linedata, function(d) { 
+          for (var prop in d) {
+                if (prop == name){
+                  return d[prop];
+                }
+              }  
+        })]);
+
+        var datanest=d3.nest()
+                .key(function(d){
+                    return d.Flow;
+                })
+                .entries(linedata);
+
+
+        datanest.forEach(function(d,i){
+            if(i==0){
+                gg.append("path")
+                    .attr("class","line")
+                    .style("stroke","red")
+                    .attr("d",line(d.values));
+            }else{
+                gg.append("path")
+                    .attr("class","line")
+                    .style("stroke","steelblue")
+                    .attr("d",line(d.values));
+            }
+        });
+       var legend=gg.append('g')
+         .attr("class", "legend")
+         .selectAll('rect')
+         .data(['Inflow', 'Outflow'])
+         .enter()
+        legend.append("rect")
+              .attr("y",function(d,i){
+                  return linewidth/35-i*10
+              })
+              .attr("x", 540)
+              .attr("width", 10)
+              .attr("height", 7)
+              .style("fill", function(d, i){return ["steelblue", 'red'][i]});
+          legend.append("text")
+              .attr("y", function(d, i){return linewidth/25-i*10})
+              .attr("x", 560)
+              .text(function(d,i) {
+                  if(i==0){
+                      return "inflow"
+                  }else{
+                      return "outflow"
+                  }
+                  });
+        gg.append("g")
+                .attr("class", "x axis")
+                .attr("transform", "translate(0," + lineheight + ")")
+                .call(xAxis);
+        gg.append("g")
+            .attr("class", "y axis")
+            .call(yAxis);
+    })
+
+
+
+
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>The Migration Flow</title>
+    <script src="https://d3js.org/d3.v4.js"></script>
+    <script src="https://d3js.org/topojson.v1.min.js"></script>
+
+    <style>
+        #main path:hover {
+          fill:pink;
+          fill-opacity:0.7;
+        }
+        body {
+          background: #000020;
+          font: 12px Arial;
+          /*background: white;*/
+        }
+        #count {
+          position: absolute;
+          top: 30%;
+          left: 67%;
+          color: white;
+          font-size: 40px;
+        }
+        .states {
+            /*fill: #000030;*/
+            fill-opacity: 0; 
+            /*stroke: #ADD8E6;*/
+            stroke: white;
+            stroke-linejoin: round;
+        }
+        #secondary {
+          position: absolute;
+          top: 0%;
+          left: 68%;
+        }
+        .minimap {
+            fill: purple;
+            stroke: #ADD8E6;
+            stroke-linejoin: round;
+        }
+        #bar {
+          position: absolute;
+          top: 60%;
+          left: 60%;
+          background-color: rgba(0,0,34,0);
+          z-index: 5;
+          color:white;
+        }
+        .linez {
+          /*stroke: steelblue;*/
+          stroke-width: 2;
+          fill: none;
+        }
+        .axis path,
+        .axis line {
+            fill: none;
+            stroke: grey;
+            stroke-width: 1;
+            shape-rendering: crispEdges;
+        }
+        .axis text{
+          fill: white;
+        }
+        .yaxis text{
+          fill: white;
+        }
+        .yaxis path,line{
+          stroke:grey;
+        }
+        h1 {
+          color: white;
+          position: absolute;
+          bottom: 0;
+          z-index: 6;
+        }
+        h2 {
+          color: white;
+          position: absolute;
+          bottom: 0;
+          right: 5%;
+          z-index: 7;
+        }
+        h3 {
+          color: white;
+          position: absolute;
+          bottom: 0;
+          z-index: 7;
+        }
+    </style>
+</head>
+<body>
+<p id="count" style="z-index: 4;"></p>
+<div>
+<canvas id="canvas" width="1200" height="700"
+style="position: absolute;left: 0;top:0;z-index: 0;"></canvas>
+
+<canvas id="canvas1" width="1200" height="700"
+style="position: absolute;left: 0;top:0;z-index: 1;"></canvas>
+
+<svg id="main" style="position: absolute; left: 0; top: 0; z-index: 2;">
+    <text x="20" y="950" font-family="sans-serif" font-size="20px" fill="white">
+        An interactive flowing visualization by Shijian Li&Zheng Nie&Yi Jiang
+    </text>
+
+    <text x="20" y="1000" font-family="sans-serif" font-size="20px" fill="white">
+        Summary
+    </text>
+    <text x="20" y="1030" font-family="sans-serif" font-size="16px" fill="white">
+        The line chart on the lower right immediately shows the migration trend of a state over ten years from 2005 to 2015 after an easy click on a state.
+    </text>
+    <text x="20" y="1050" font-family="sans-serif" font-size="16px" fill="white">
+    After a click on a state, you can hover over a state you are interested in. Then the magnitude of migration can be seen from the number of migrants.
+    </text>
+    <text x="20" y="1070" font-family="sans-serif" font-size="16px" fill="white">
+        Besides, we add a heatmap to better show the magnitude of a state of interest to all other states across whole country.
+    </text>
+    <text x="20" y="1090" font-family="sans-serif" font-size="16px" fill="white">
+    The number of migrants into a state or leave a state can be obtained by mouseover to the corresponding states.
+    </text>
+    <text x="20" y="1120" font-family="sans-serif" font-size="20px" fill="white">
+    Credits
+    </text>
+    <text x="20" y="1140" font-family="sans-serif" font-size="16px" fill="white">
+    This project was created by Shijian Li, Zheng Nie and Yi Jiang for a graduate course in Data Visualization at WPI taught by Lane Harrison.
+    </text>
+    <text x="20" y="1160" font-family="sans-serif" font-size="16px" fill="white">
+    Several open-source projects were used like D3.js,HTML,Canvas element
+    </text>
+    <text x="20" y="1180" font-family="sans-serif" font-size="16px" fill="white">
+    Much of the inspiration for this report comes from:<a href=http://www.lucify.com/the-flow-towards-europe>Lucify.com</a>
+    </text>
+    <text x="20" y="1200" font-family="sans-serif" font-size="16px" fill="white">
+    Data Source:<a href="http://www.census.gov/data/tables/time-series/demo/geographic-mobility/state-to-state-migration.html">Census of Governments</a>
+    </text>
+    <text x="20" y="1230" font-family="sans-serif" font-size="20px" fill="white">
+        Source Code
+    </text>
+    <text x="20" y="1250" font-family="sans-serif" font-size="16px" fill="white">
+    The source code and raw data are available on github:<a href="https://github.com/YiJiang93/Population-Migration-of-USA">On Github</a>
+    </text>
+</svg>
+</div>
+
+
+<svg id="secondary" width="300" height="200" style="z-index: 3;"></svg>
+<svg id="bar" width="600" height="200"></svg>
+<h1>Domestic Migration of The US, 2005-2015</h1>
+<h2 id="auto"></h2>
+
+
+
+<script>
+    var canvas = document.getElementById('canvas');
+    var ctx = canvas.getContext('2d');
+    var canvas1 = document.getElementById('canvas1');
+    var ctx1 = canvas1.getContext('2d');
+    var count=0;
+    var width = 1200, height = 700;
+    var margin = {top: 20, right: 20, bottom: 60, left: 60};
+    var state_capital={};
+    var canvas_capital={};
+    var names = [];
+    var revNames = {};
+    var selected = "";
+    var target = "";
+    var canvasOffset = 10;
+    var yOffset = 60;
+    var year = "05";
+    var clicked = false;
+    var massflag = [];
+    var autoplay = true;
+
+    var linemargin = {top: 30, right: 20, bottom: 30, left: 50},
+    linewidth = 550 - linemargin.left - linemargin.right,
+    lineheight = 190 - linemargin.top - linemargin.bottom;
+
+    d3.tsv("https://lawdpls.github.io/idname.tsv", function(tsv){
+    tsv.forEach(function(d,i){
+      var name = d.name;
+      var id = d.id;
+      names.push({name, id});
+    });
+    tsv.forEach(function(d,i){
+      revNames[d.id] = d.name;
+    });
+    d3.json("https://lawdpls.github.io/05/capital.json", function(error, nodes) {
+      if (error) throw error;
+      d3.csv("https://lawdpls.github.io/05/sum.csv",function(error,linedata){
+        if (error) throw error;
+        var gg = d3.select("#bar")
+        .append("g")
+        .attr("transform",
+              "translate(" + linemargin.left + "," + linemargin.top + ")");
+        var x = d3.scaleTime().range([0, linewidth]);
+        var y = d3.scaleLinear().range([lineheight, 0]);
+        var xAxis = d3.axisBottom(x);
+        var yAxis = d3.axisLeft(y);
+        var parseDate = d3.timeParse("%Y");
+        linedata.forEach(function(d){
+          for (var prop in d){
+            if (prop != "Flow") {
+              d[prop] = +d[prop];
+            }
+          }
+            d.Year= parseDate(d.Year);
+        })
+        x.domain(d3.extent(linedata, function(d) { 
+          return d.Year; 
+        }));
+        var bar05=d3.select('#bar')
+                      .append('rect')
+                      .attr('class','yearz')
+                      .attr('id','bar05')
+                      .attr('x', 50)
+                      .attr('y', 20)
+                      .attr('height', 140)
+                      .attr('width', 25)
+                      .on('mouseover', function(d){
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0.6);
+                      })
+                      .on('mouseout', function(d){
+                        if (year != "05") {
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0);
+                      }
+                      })
+                      .style('opacity', 0)
+                      .style('fill', 'white');
+        var bar06=d3.select('#bar')
+                      .append('rect')
+                      .attr('class','yearz')
+                      .attr('id','bar06')
+                      .attr('x', 85)
+                      .attr('y', 20)
+                      .attr('height', 140)
+                      .attr('width', 30)
+                      .on('mouseover', function(d){
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0.6);
+                      })
+                      .on('mouseout', function(d){
+                        if (year != "06") {
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0);
+                      }
+                      })
+                      .style('opacity', 0)
+                      .style('fill', 'white');
+        var bar07=d3.select('#bar')
+                      .append('rect')
+                      .attr('class','yearz')
+                      .attr('id','bar07')
+                      .attr('x', 131)
+                      .attr('y', 20)
+                      .attr('height', 140)
+                      .attr('width', 30)
+                      .on('mouseover', function(d){
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0.6);
+                      })
+                      .on('mouseout', function(d){
+                        if (year != "07") {
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0);
+                      }
+                      })
+                      .style('opacity', 0)
+                      .style('fill', 'white');
+        var bar08=d3.select('#bar')
+                      .append('rect')
+                      .attr('class','yearz')
+                      .attr('id','bar08')
+                      .attr('x', 180)
+                      .attr('y', 20)
+                      .attr('height', 140)
+                      .attr('width', 30)
+                      .on('mouseover', function(d){
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0.6);
+                      })
+                      .on('mouseout', function(d){
+                        if (year != "08") {
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0);
+                      }
+                      })
+                      .style('opacity', 0)
+                      .style('fill', 'white');
+        var bar09=d3.select('#bar')
+                      .append('rect')
+                      .attr('class','yearz')
+                      .attr('id','bar09')
+                      .attr('x', 227)
+                      .attr('y', 20)
+                      .attr('height', 140)
+                      .attr('width', 30)
+                      .on('mouseover', function(d){
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0.6);
+                      })
+                      .on('mouseout', function(d){
+                        if (year != "09") {
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0);
+                      }
+                      })
+                      .style('opacity', 0)
+                      .style('fill', 'white');
+        var bar10=d3.select('#bar')
+                      .append('rect')
+                      .attr('class','yearz')
+                      .attr('id','bar10')
+                      .attr('x', 275)
+                      .attr('y', 20)
+                      .attr('height', 140)
+                      .attr('width', 30)
+                      .on('mouseover', function(d){
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0.6);
+                      })
+                      .on('mouseout', function(d){
+                        if (year != "10") {
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0);
+                      }
+                      })
+                      .style('opacity', 0)
+                      .style('fill', 'white');
+        var bar11=d3.select('#bar')
+                      .append('rect')
+                      .attr('class','yearz')
+                      .attr('id','bar11')
+                      .attr('x', 325)
+                      .attr('y', 20)
+                      .attr('height', 140)
+                      .attr('width', 30)
+                      .on('mouseover', function(d){
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0.6);
+                      })
+                      .on('mouseout', function(d){
+                        if (year != "11") {
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0);
+                      }
+                      })
+                      .style('opacity', 0)
+                      .style('fill', 'white');
+        var bar12=d3.select('#bar')
+                      .append('rect')
+                      .attr('class','yearz')
+                      .attr('id','bar12')
+                      .attr('x', 372)
+                      .attr('y', 20)
+                      .attr('height', 140)
+                      .attr('width', 30)
+                      .on('mouseover', function(d){
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0.6);
+                      })
+                      .on('mouseout', function(d){
+                        if (year != "12") {
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0);
+                      }
+                      })
+                      .style('opacity', 0)
+                      .style('fill', 'white');
+        var bar13=d3.select('#bar')
+                      .append('rect')
+                      .attr('class','yearz')
+                      .attr('id','bar13')
+                      .attr('x', 420)
+                      .attr('y', 20)
+                      .attr('height', 140)
+                      .attr('width', 30)
+                      .on('mouseover', function(d){
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0.6);
+                      })
+                      .on('mouseout', function(d){
+                        if (year != "13") {
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0);
+                      }
+                      })
+                      .style('opacity', 0)
+                      .style('fill', 'white');
+        var bar14=d3.select('#bar')
+                      .append('rect')
+                      .attr('class','yearz')
+                      .attr('id','bar14')
+                      .attr('x', 465)
+                      .attr('y', 20)
+                      .attr('height', 140)
+                      .attr('width', 30)
+                      .on('mouseover', function(d){
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0.6);
+                      })
+                      .on('mouseout', function(d){
+                        if (year != "14") {
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0);
+                      }
+                      })
+                      .style('opacity', 0)
+                      .style('fill', 'white');
+        var bar15=d3.select('#bar')
+                      .append('rect')
+                      .attr('class','yearz')
+                      .attr('id','bar15')
+                      .attr('x', 520)
+                      .attr('y', 20)
+                      .attr('height', 140)
+                      .attr('width', 20)
+                      .on('mouseover', function(d){
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0.6);
+                      })
+                      .on('mouseout', function(d){
+                        if (year != "15") {
+                        var temp = d3.select(this);
+                        temp.style('opacity', 0);
+                      }
+                      })
+                      .style('opacity', 0)
+                      .style('fill', 'white');
+        bar05.on('click', function(d){
+          massflag = [];
+          count = 0;
+          d3.selectAll('.yearz')
+            .style('opacity', 0);
+          bar05.style('opacity', 0.6);
+          year="05";
+          clicked=true;
+          flow(canvas_capital, revNames[target]);
+          mini();
+        })
+        bar06.on('click', function(d){
+          massflag = [];
+          count = 0;
+          d3.selectAll('.yearz')
+            .style('opacity', 0);
+          bar06.style('opacity', 0.6);
+          year="06";
+          clicked=true;
+          flow(canvas_capital, revNames[target]);
+          mini();
+        })
+        bar07.on('click', function(d){
+          massflag = [];
+          count = 0;
+          d3.selectAll('.yearz')
+            .style('opacity', 0);
+          bar07.style('opacity', 0.6);
+          year="07";
+          clicked=true;
+          flow(canvas_capital, revNames[target]);
+          mini();
+        })
+        bar08.on('click', function(d){
+          massflag = [];
+          count = 0;
+          d3.selectAll('.yearz')
+            .style('opacity', 0);
+          bar08.style('opacity', 0.6);
+          year="08";
+          clicked=true;
+          flow(canvas_capital, revNames[target]);
+          mini();
+        })
+        bar09.on('click', function(d){
+          massflag = [];
+          count = 0;
+          d3.selectAll('.yearz')
+            .style('opacity', 0);
+          bar09.style('opacity', 0.6);
+          year="09";
+          clicked=true;
+          flow(canvas_capital, revNames[target]);
+          mini();
+        })
+        bar10.on('click', function(d){
+          massflag = [];
+          count = 0;
+          d3.selectAll('.yearz')
+            .style('opacity', 0);
+          bar10.style('opacity', 0.6);
+          year="10";
+          clicked=true;
+          flow(canvas_capital, revNames[target]);
+          mini();
+        })
+        bar11.on('click', function(d){
+          massflag = [];
+          count = 0;
+          d3.selectAll('.yearz')
+            .style('opacity', 0);
+          bar11.style('opacity', 0.6);
+          year="11";
+          clicked=true;
+          flow(canvas_capital, revNames[target]);
+          mini();
+        })
+        bar12.on('click', function(d){
+          massflag = [];
+          count = 0;
+          d3.selectAll('.yearz')
+            .style('opacity', 0);
+          bar12.style('opacity', 0.6);
+          year="12";
+          clicked=true;
+          flow(canvas_capital, revNames[target]);
+          mini();
+        })
+        bar13.on('click', function(d){
+          massflag = [];
+          count = 0;
+          d3.selectAll('.yearz')
+            .style('opacity', 0);
+          bar13.style('opacity', 0.6);
+          year="13";
+          clicked=true;
+          flow(canvas_capital, revNames[target]);
+          mini();
+        })
+        bar14.on('click', function(d){
+          massflag = [];
+          count = 0;
+          d3.selectAll('.yearz')
+            .style('opacity', 0);
+          bar14.style('opacity', 0.6);
+          year="14";
+          clicked=true;
+          flow(canvas_capital, revNames[target]);
+          mini();
+        })
+        bar15.on('click', function(d){
+          massflag = [];
+          count = 0;
+          d3.selectAll('.yearz')
+            .style('opacity', 0);
+          bar15.style('opacity', 0.6);
+          year="15";
+          clicked=true;
+          flow(canvas_capital, revNames[target]);
+          mini();
+        })
+        var legend=gg.append('g')
+         .attr("class", "legend")
+         .selectAll('rect')
+         .data(['Inflow', 'Outflow'])
+         .enter()
+        legend.append("rect")
+              .attr("y",function(d,i){
+                  return linewidth/30-i*15
+              })
+              .attr("x", 500)
+              .attr("width", 10)
+              .attr("height", 7)
+              .style("fill", function(d, i){return ["steelblue", 'red'][i]});
+          legend.append("text")
+              .attr("y", function(d, i){return linewidth/20-i*15})
+              .attr("x", 515)
+              .style("fill","white")
+              .text(function(d,i) {
+                  if(i==0){
+                      return "In"
+                  }else{
+                      return "Out"
+                  }
+                  });
+        gg.append("g")
+                .attr("class", "x axis")
+                .attr("transform", "translate(0," + lineheight + ")")
+                .call(xAxis);
+
+        var graph = d3.select("#main")
+                        .attr("width", width)
+                        .attr("height", 1300)
+                        .append("g")
+                        .attr("transform", "translate(-30, 20)");
+        var projection = d3.geoAlbersUsa()
+                .scale(1100);
+        var path = d3.geoPath()
+                .projection(projection);
+        d3.queue().defer(d3.json, "https://lawdpls.github.io/05/us.json")
+                .await(ready);
+        function ready(error, us) {
+            if (error) throw error;
+            var data = topojson.feature(us, us.objects.states).features;
+            graph.selectAll("path")
+                 .data(data)
+                 .enter()
+                 .append("path")
+                 .attr("class", "states")
+                 .attr("d", path);
+            var dot = graph.selectAll(".circle")
+                    .data(nodes)
+                    .enter().append("circle")
+                    .attr("class", "dot")
+                    .attr("id", function(d){
+                        return d.code;
+                    })
+                    .style("fill", "gray")
+                    .style("opacity", 0)
+                    .attr("r", 2)
+                    .attr("transform", function(d) {
+                        state_capital[d.state] = projection([d.longitude, d.latitude])
+                        return "translate(" + projection([d.longitude, d.latitude]) + ")";})
+
+            // var title=graph.selectAll("text")
+            //         .data(nodes)
+            //         .enter().append("text")
+            //         .text(function (d) {
+            //             return d.code
+            //         })
+            //         .attr("transform", function(d) {
+            //             return "translate(" + projection([d.longitude-0.5, d.latitude]) + ")";})
+            //         .attr("font-size", "11px")
+            //         .attr("fill","white");
+            for (var i = 0; i < nodes.length; i++) {
+                canvas_capital[nodes[i].state] = [state_capital[nodes[i].state][0] - 20, state_capital[nodes[i].state][1] + 90]
+            }
+            var size = Object.keys(canvas_capital).length;
+
+            d3.selectAll(".states")
+              .on("mouseover", function(d){
+                if (d.id != target) {
+                  selected = d.id;
+                }
+              })
+              .on("mouseout", function(d){
+                selected = "";
+              })
+              .on("click", function(d){
+                massflag = [];
+                count = 0;
+                d3.selectAll(".linez")
+                  .remove();
+                d3.selectAll(".yaxis")
+                  .remove();
+                  clicked=true;
+                target = d.id;
+                d3.selectAll(".yearz").style("opacity",0);
+    d3.select("#bar"+year).style("opacity",0.6);
+
+      var line=d3.line()
+            .x(function(d) { 
+              return x(d.Year); 
+            })
+            .y(function(d) {
+              for (var prop in d) {
+                if (prop == revNames[target]){
+                  return y(d[prop]);
+                }
+              } 
+            });        
+        y.domain([0, d3.max(linedata, function(d) { 
+          for (var prop in d) {
+                if (prop == revNames[target]){
+                  return d[prop];
+                }
+              }  
+        })]);
+
+        var datanest=d3.nest()
+                .key(function(d){
+                    return d.Flow;
+                })
+                .entries(linedata);
+
+
+        datanest.forEach(function(d,i){
+            if(i==0){
+                gg.append("path")
+                    .attr("class","linez")
+                    .style("stroke","red")
+                    .attr("d",line(d.values));
+            }else{
+                gg.append("path")
+                    .attr("class","linez")
+                    .style("stroke","steelblue")
+                    .attr("d",line(d.values));
+            }
+        });
+       
+        gg.append("g")
+            .attr("class", "yaxis")
+            .call(yAxis);
+
+        flow(canvas_capital, revNames[d.id]);
+        mini();
+              })
+        }
+    });
+});
+    });
+function mini() {
+          var projection2 = d3.geoAlbersUsa()
+                .scale(400)
+                .translate([150, 100]);
+                d3.select(".minimap")
+                .remove();
+                var path2 = d3.geoPath()
+                .projection(projection2);
+            d3.csv("https://lawdpls.github.io/05/migration"+ year +".csv", function(error, mig){
+              // console.log(mig)
+              d3.json("https://lawdpls.github.io/05/us.json", function(unitedState) {
+              var data2 = topojson.feature(unitedState, unitedState.objects.states).features;
+              var graph2 = d3.select("#secondary")
+                        .append("g")
+                        .attr("class", "minimap")
+                        .selectAll("path")
+                        .data(data2)
+                        .enter()
+                        .append("path")
+                        .attr("d", path2)
+                        .style("fill", function(o){
+                          if (o.id == target) {
+                            return "red";
+                          }
+                        })
+                        .style("opacity", function(o,i){
+                          // console.log(mig[target])
+                          var temp;
+                            if (target == 50) {
+                              temp = 44;
+                            }else if (target == 51) {
+                              temp = 45;
+                            }else if (target == 53) {
+                              temp = 46;
+                            }else if (target == 54) {
+                              temp = 47;
+                            }else if (target == 55) {
+                              temp = 48;
+                            }else if (target == 56) {
+                              temp = 49;
+                            }else if (target == 1) {
+                              temp = 0;
+                            }else if (target == 2) {
+                              temp = 1;
+                            }else if (target == 4) {
+                              temp = 2;
+                            }else if (target == 5) {
+                              temp = 3;
+                            }else if (target == 6) {
+                              temp = 4;
+                            }else if (target == 8) {
+                              temp = 5;
+                            }else if (target == 9) {
+                              temp = 6;
+                            }else if (target == 10) {
+                              temp = 7;
+                            }else if (target == 12) {
+                              temp = 8;
+                            }else if (target == 13) {
+                              temp = 9;
+                            }else if (target >= 15 && target <= 42) {
+                              temp = target-5;
+                            }else if (target > 42 && target < 50) {
+                              temp = target-6;
+                            }
+                            // console.log(mig)
+                            if (o.id != target) {
+                              if (mig[temp][revNames[o.id]] < 100) {
+                                return 0
+                              } else if (mig[temp][revNames[o.id]] < 500) {
+                                return 0.1
+                              } else if (mig[temp][revNames[o.id]] < 1000) {
+                                return 0.2
+                              } else if (mig[temp][revNames[o.id]] < 2000) {
+                                return 0.3
+                              } else if (mig[temp][revNames[o.id]] < 4000) {
+                                return 0.4
+                              } else if (mig[temp][revNames[o.id]] < 8000) {
+                                return 0.5
+                              } else if (mig[temp][revNames[o.id]] < 12000) {
+                                return 0.6
+                              } else if (mig[temp][revNames[o.id]] < 20000) {
+                                return 0.7
+                              } else if (mig[temp][revNames[o.id]] < 30000) {
+                                return 0.8
+                              } else if (mig[temp][revNames[o.id]] < 40000) {
+                                return 0.9
+                              } else {
+                                return 1
+                              }
+                            }
+                        })
+                        .attr("stroke", "white");
+            })
+            })
+}
+   migrant.instances = [];
+   function migrant(x1,y1,x2,y2,startState){
+     this.x1=x1;
+     this.x2=x2;
+     this.y1=y1;
+     this.y2=y2;
+     this.startState=startState;
+     this.vx=(x2-x1)/((x1-x2)**2+(y1-y2)**2)**0.5;
+     this.vy=(y2-y1)/((x1-x2)**2+(y1-y2)**2)**0.5;
+     this.radius=1;
+     this.color="black";
+     this.draw=function(){
+
+            // var img=new Image();
+            // var x=this.x1;
+            // var y=this.y1;
+            // img.onload = function(){
+            //     ctx1.globalAlpha = 1;
+            //     ctx1.drawImage(img,x,y,2,2);
+            // };
+            //img.src = 'https://mdn.mozillademos.org/files/5395/backdrop.png';
+            // img.src="one-white-pixel.png"
+       
+
+            /*ctx1.beginPath();
+            ctx1.arc(this.x1, this.y1, this.radius, 0, Math.PI*2, true);
+            ctx1.closePath();
+            ctx1.fillStyle = this.color;
+            ctx1.fill();*/
+
+          var temp;
+          for (var i = 0; i < names.length; i++){
+            if (names[i].name == this.startState) {
+              temp = names[i].id;
+              break;
+            }
+          }
+          if (selected == "" || selected == temp) {
+            ctx1.fillStyle = 'rgba(255,255,255, 1)';
+          } else {
+            ctx1.fillStyle = 'rgba(255,255,255, 0)';
+          }
+            ctx1.fillRect(this.x1,this.y1,2,2);
+
+       }
+
+   }
+
+   migrant.prototype.prepare=function(){
+           var self=this;
+           self.draw();
+           self.x1 += self.vx;
+           self.y1 += self.vy;
+           this.s=window.requestAnimationFrame(self.prepare.bind(this));
+           if (Math.abs(this.x1-this.x2)<=this.radius && Math.abs(this.y1-this.y2)<=this.radius){
+               count+=100;
+               window.cancelAnimationFrame(this.s);
+               ctx1.clearRect(this.x1-this.radius*3, this.y1-this.radius*3, 6*this.radius, 6*this.radius);
+           }
+           //window.requestAnimationFrame(self.animate.bind(this));//function(){this.animate()}.bind(this)
+       }
+   migrant.prototype.animate=function(){
+           migrant.instances.push(this);
+           this.prepare();
+   }
+   migrant.prototype.clear=function(){
+       window.cancelAnimationFrame(this.s);
+   }
+
+
+  function flow(state_capital, state){
+        d3.csv("https://lawdpls.github.io/05/migration"+ year + ".csv", function(error, migration){
+                if (error) throw error;
+                stateNames=d3.keys(migration[1])
+
+                var states=new Object();
+                states[state]=migration[stateNames.indexOf(state)]
+
+                var capital=state_capital;
+                function stateToMigrant(state){
+                      end_coord=capital[state];
+                      starts=states[state];
+                      migrants=Object.keys(starts).map(function(key){
+                            start_coord=capital[key]
+                            instance=new migrant(start_coord[0], start_coord[1], end_coord[0], end_coord[1], key)
+                            pair=new migrant_move(instance, starts[key])
+                            return pair})
+                      return migrants
+                }
+                function interMove(states, state){ // states is an object that contains all interstate migrant flow
+                    // console.log(stateToMigrant(state));
+                    stateToMigrant(state).map(function(d){d.move()})
+                }
+                interMove(states, state);
+                if (migrant_move.instances.length>50){
+                     migrant.instances.forEach(function(d){d.clear()});
+                     migrant.instances=[];
+                     migrant_move.instances.slice(0, 50).map(function(d){d.clear()});
+                     migrant_move.instances.splice(0,50);
+                     count=0;
+                     ctx1.clearRect(0, 0, canvas1.width, canvas1.height);
+                     //console.log(migrant_move.instances);
+                };
+
+                if (migrant_move.instances.length>0){renderer()};
+        })
+  }
+
+  function renderer(){
+		ctx1.fillStyle = 'rgba(0, 0, 32, 0.1)';
+        ctx1.fillRect(0, 0, canvas1.width, canvas1.height);
+		window.requestAnimationFrame(renderer);
+  }
+
+
+  migrant_move.instances = [];
+  function migrant_move(instance, number){
+      var dudu = number;
+      // console.log(dudu)
+      this.migrant=instance
+      this.number=+number
+      // console.log(this.number)
+      if (this.number == 0) {
+        massflag.push("1");
+      }
+      this.generate=function(){
+          if (this.number>0) {
+              migrants=new migrant(this.migrant.x1-canvasOffset+Math.random()*(5-(-10)), this.migrant.y1-yOffset-canvasOffset+Math.random()*(5-(-10)), this.migrant.x2-canvasOffset, this.migrant.y2-yOffset-canvasOffset, this.migrant.startState)
+              migrants.animate()
+              this.number-=100
+              //console.log(this.number)
+              for (var i = 0; i<names.length;i++) {
+                if (names[i].name == instance.startState) {
+                  names[i].num = dudu - this.number;
+                }
+              }
+          }
+          else {
+              massflag.push("1");
+              window.clearInterval(this.send);
+          }
+      }
+      this.move=function(){
+          migrant_move.instances.push(this);
+          if (dudu != 0) {
+            if (4000000/dudu < 10000) {
+              this.send=window.setInterval(this.generate.bind(this), 4000000/dudu);
+            } else {
+              this.send=window.setInterval(this.generate.bind(this), 10000);
+            }
+          }
+      }
+      this.clear=function(){
+          window.clearInterval(this.send);
+      }
+  }
+
+
+var ctVar = setInterval(function(){ myTimer() }, 50);
+
+function myTimer() {
+  if (autoplay == true) {
+    document.getElementById("auto").innerHTML = "Autoplay:On";
+  } else {
+    document.getElementById("auto").innerHTML = "Autoplay:Off";
+  }
+  if (selected == ""){
+    if(count != 0) {
+      document.getElementById("count").innerHTML = "To: " + revNames[target] + "<br>"+ count;
+    } else if (revNames[target] != null){
+      document.getElementById("count").innerHTML = revNames[target] + "<br>"+ count;
+    }
+  } else {
+    var temp;
+    for (var i =0; i< names.length; i++){
+      if (names[i].id == selected){
+        temp = names[i].num;
+      }
+    }
+    if (temp != null) {
+    document.getElementById("count").innerHTML = "From: " + revNames[selected] + "<br>" + temp; } else {
+      document.getElementById("count").innerHTML = revNames[selected];
+    }
+  }
+}
+
+function autoAdvance(){
+    d3.select(".yearz").attr("opacity",0);
+    if (year == '05'){
+      year = '06';
+    } else if(year == '06'){
+      year = '07';
+    } else if(year == '07'){
+      year = '08';
+    } else if(year == '08'){
+      year = '09';
+    } else if(year == '09'){
+      year = '10';
+    } else if(year == '10'){
+      year = '11';
+    } else if(year == '11'){
+      year = '12';
+    } else if(year == '12'){
+      year = '13';
+    } else if(year == '13'){
+      year = '14';
+    } else if(year == '14'){
+      year = '15';
+    } else if(year == '15'){
+      year = '05';
+    }
+    d3.selectAll(".yearz").style("opacity",0);
+    d3.select("#bar"+year).style("opacity",0.6);
+    massflag = []; 
+    flow(canvas_capital, revNames[target]);
+    mini();
+}
+
+
+
+
+var playTimer = setInterval(function(){
+  if (autoplay == true && clicked == true && massflag.length == 49){
+    autoAdvance();
+  }
+}, 7000);
+
+d3.selectAll("#auto")
+  .on("click", function(d){
+    autoplay = autoplay == true? false:true;
+
+
+  })
+
+
+
+
+</script>
+
+
+
+</body>
+</html>

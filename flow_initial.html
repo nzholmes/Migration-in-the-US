@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Multiple Views</title>
+    <script src="https://d3js.org/d3.v4.js"></script>
+    <script src="https://d3js.org/topojson.v1.min.js"></script>
+
+    <style>
+        .states {
+            fill: #eee;
+            stroke: black;
+            stroke-linejoin: round;
+        }
+    </style>
+</head>
+<body>
+<canvas id="canvas" width="1200" height="700"
+style="position: absolute;left: 0;top:0;z-index: 0;"></canvas>
+
+<canvas id="canvas1" width="1200" height="700"
+style="position: absolute;left: 0;top:0;z-index: 0;"></canvas>
+
+<svg></svg>
+
+<script>
+    var canvas = document.getElementById('canvas');
+    var ctx = canvas.getContext('2d');
+    var canvas1 = document.getElementById('canvas1');
+    var ctx1 = canvas1.getContext('2d');
+    var raf;
+
+
+    var width = 1200, height = 700;
+    var margin = {top: 20, right: 20, bottom: 60, left: 60};
+    var state_capital={};
+    var canvas_capital={};
+
+    d3.json("https://lawdpls.github.io/05/capitals.json", function(error, nodes) {
+        if (error) throw error;
+        //var canvas = document.getElementById('canvas');
+        //var ctx = canvas1.getContext('2d');
+        var graph = d3.select("svg")
+                        .attr("width", width)
+                        .attr("height", height)
+                        .append("g")
+                        .attr("transform", "translate(-30, 80)");
+        var projection = d3.geoAlbersUsa()
+                .scale(1100);
+        var path = d3.geoPath()
+                .projection(projection);
+        d3.queue().defer(d3.json, "https://lawdpls.github.io/05/us.json")
+                .await(ready);
+        function ready(error, us) {
+            if (error) throw error;
+            graph.append("path")
+                    .datum(topojson.feature(us, us.objects.states))
+                    .attr("class", "states")
+                    .attr("d", path);
+            var dot = graph.selectAll(".circle")
+                    .data(nodes)
+                    .enter().append("circle")
+                    .attr("class", "dot")
+                    .attr("id", function (d) {
+                        return d.code;
+                    })
+                    .style("fill", "gray")
+                    .style("opacity", 0.5)
+                    .attr("r", 2)
+                    .attr("transform", function (d) {
+                        state_capital[d.state] = projection([d.longitude, d.latitude])
+                        return "translate(" + projection([d.longitude, d.latitude]) + ")";
+                    })
+                    .on("mouseover", function (d) {
+                        var circle = d3.select(this);
+                        circle.transition()
+                                .style("fill", "black")
+                                .style("opacity", 1)
+                                .attr("r", 5);
+                    })
+                    .on("mouseout", function (d) {
+                        var circle = d3.select(this);
+                        circle.style("fill", "gray")
+                                .style("opacity", 0.5)
+                                .attr("r", 2);
+                    })
+            dot.append("title")
+                    .text(function (d) {
+                        return "City Name: " + d.city + "\n" + "State: " + d.state + "\n" + "Coordinates on SVG: " + projection([d.longitude, d.latitude]);
+                    });
+            for (var i = 0; i < nodes.length; i++) {
+                canvas_capital[nodes[i].state] = [state_capital[nodes[i].state][0] - 20, state_capital[nodes[i].state][1] + 90]
+                ctx.beginPath();
+                ctx.arc(state_capital[nodes[i].state][0] - 20, state_capital[nodes[i].state][1] + 90, 5, 0, Math.PI * 2, true);
+                ctx.closePath();
+                ctx.fillStyle = "red";
+                ctx.fill();
+                console.log([state_capital[nodes[i].state][0] - 20, state_capital[nodes[i].state][1] + 90])
+            }
+
+            //console.log(canvas_capital);
+
+            //instance = new migrant(canvas_capital.Alabama[0], canvas_capital.Alabama[1], canvas_capital.Florida[0], canvas_capital.Florida[1])
+            //instance.animate();
+        }
+    });
+
+
+
+   function migrant(x1,y1,x2,y2){
+
+       this.x1=x1;
+       this.x2=x2;
+       this.y1=y1;
+       this.y2=y2;
+       this.vx=(x2-x1)/((x1-x2)**2+(y1-y2)**2)**0.5;
+       this.vy=(y2-y1)/((x1-x2)**2+(y1-y2)**2)**0.5;
+       this.radius=2;
+       this.color="blue";
+
+       this.draw=function(){
+            ctx1.beginPath();
+            ctx1.arc(this.x1, this.y1, this.radius, 0, Math.PI*2, true);
+            ctx1.closePath();
+            ctx1.fillStyle = this.color;
+            ctx1.fill();
+       }
+
+
+       if (this.x1<this.x2){
+
+
+           this.direction = function () {
+               //ctx1.fillRect(this.x1 - this.vx -2* this.radius, this.y1 - this.vy - 2*this.radius, 5 * this.radius,5 * this.radius);
+               ctx1.clearRect(this.x1 - this.vx -2* this.radius, this.y1 - this.vy - 2*this.radius, 5 * this.radius,5 * this.radius);
+           }
+
+       }
+
+       else {
+
+                this.direction = function () {
+                    //ctx1.fillRect(this.x1 -this.vx - 2*this.radius, this.y1 - this.vy - 2*this.radius, 5 * this.radius, 5 * this.radius);
+                    ctx1.clearRect(this.x1 -this.vx - 2*this.radius, this.y1 - this.vy - 2*this.radius, 5 * this.radius, 5 * this.radius);
+                }
+
+       }
+
+
+
+
+
+   }
+
+
+
+   migrant.prototype.prepare=function(){
+           var self=this;
+           ctx1.fillStyle = 'rgba(255, 255, 255, 0.3)';
+           //ctx.fillRect(0, 0, canvas.width, canvas.height);
+           //ctx.clearRect(0, 0, canvas.width, canvas.height);
+           this.direction();
+           self.draw();
+           self.x1 += self.vx;
+           self.y1 += self.vy;
+           console.log(this.x1);
+           if (Math.abs(this.x1-this.x2)<=this.radius && Math.abs(this.y1-this.y2)<=this.radius){
+               console.log(this.x1);
+               window.clearInterval(this.s);
+               ctx1.clearRect(this.x1-this.radius*3, this.y1-this.radius*3, 6*this.radius, 6*this.radius);
+           }
+           //window.setInterval(this.animate.bind(this), 100)
+           //window.requestAnimationFrame(self.animate.bind(this));//function(){this.animate()}.bind(this)
+
+       }
+
+   migrant.prototype.animate=function(){
+
+           this.s=window.setInterval(this.prepare.bind(this), 20);
+
+   }
+
+  a=new migrant(625.4273287806287,454.7406243701706,197.21573906014282,552.4553265207218)
+  b=new migrant(610,440,236,412)
+  c=new migrant(610,440,520,408)
+  d=new migrant(610,440,127,296)
+  e=new migrant(610,440,348,316)
+  f=new migrant(610,440,740,302)
+
+
+  g=new migrant(200,200,50,50)
+  h=new migrant(200,200,50,50)
+  i=new migrant(300,300,50,50)
+  j=new migrant(300,200,100,50)
+  k=new migrant(100,200,50,100)
+  //f.animate1();
+  //g.animate1();
+
+  balls=[a,b,c,d,e,f];
+  //balls=[g,h,i,j,k];
+
+  function draw1(){
+        if (balls.length>0) {
+            ball=balls.pop();
+            ball.animate();
+        }
+  }
+
+  if (balls.length>0) {window.setInterval(draw1, 500)};
+
+
+
+
+
+
+
+</script>
+
+</body>
+</html>
