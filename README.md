@@ -37,7 +37,7 @@ We feel like dark blue background + white outlines and texts is quite minimalist
 
 1. Migration part (flowing part)
 
-  	![Flowing part](img/Flowing part.png)
+  	![Flowing part](img/Flowing-part.png)
 
   	Each flow has a definition, that it has origin-destination pairing, and the amount of dots in the flow is based on data.
   	
@@ -53,7 +53,7 @@ We feel like dark blue background + white outlines and texts is quite minimalist
 
 3. A ten-year migration line chart.
  
- 	![Line chart](img/Line chart.png)
+ 	![Line chart](img/Line-chart.png)
 
   	There are two lines in the chart, representing out-flow and in-flow respectively. At each timestamp(year) there is a highlighter, click it will change the year to the one shown on the axis, and if a state is selected already, it will start the flow of this year of the selected state.
 
